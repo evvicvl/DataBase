@@ -1,6 +1,6 @@
 #include "mainwindow.h"
 
-bool MainWindow::getWhereParentIsNull()
+void MainWindow::loadWhereParentIsNull()
 {
     QSqlQuery sqlQuery(dataBase);
     stringQuery = "SELECT * FROM \"tree\" WHERE parent_id IS NULL";
@@ -8,67 +8,65 @@ bool MainWindow::getWhereParentIsNull()
     {
         if(sqlQuery.next())
         {
-            qListItem_Cache->push_back(new QTreeWidgetItem(treeWidget_Cache));
-            qListItem_Cache->back()->setText(0, sqlQuery.value(2).toString());
-            qListItem_Cache->back()->setText(1, sqlQuery.value(0).toString());
-            treeWidget_Cache->addTopLevelItem(qListItem_Cache->back());
-
             qListItem_DataBase->push_back(new QTreeWidgetItem(treeWidget_DataBase));
-            qListItem_DataBase->back()->setText(0, "> " + sqlQuery.value(2).toString());
+            qListItem_DataBase->back()->setText(0, sqlQuery.value(2).toString());
             qListItem_DataBase->back()->setText(1, sqlQuery.value(0).toString());
+            qListItem_DataBase->back()->setText(2, sqlQuery.value(1).toString());
+            qListItem_DataBase->back()->setText(3, sqlQuery.value(3).toString());
+            qListItem_DataBase->back()->setBackground(0, QBrush(QColor(230, 230, 230)));
             treeWidget_DataBase->addTopLevelItem(qListItem_DataBase->back());
         }
-        return true;
     }
-    return false;
 }
 
-bool MainWindow::getChildren(QTreeWidgetItem* item)
+void MainWindow::loadChildren(QTreeWidgetItem* item)
 {
     QSqlQuery sqlQuery(dataBase);
-    stringQuery = QString("SELECT * FROM \"tree\" WHERE parent_id = %1  AND removed = 0").arg(item->text(1));
+    stringQuery = QString("SELECT * FROM \"tree\" WHERE parent_id = %1").arg(item->text(1));
     if(sqlQuery.exec(stringQuery))
     {
         while(item->childCount() > 0)
             item->removeChild(item->child(0));
 
-        for(int i = 0; i < qListItem_Cache->count(); i++)
-        {
-            if(qListItem_Cache->at(i)->text(1) == item->text(1))
-            {
-                while(qListItem_Cache->at(i)->childCount())
-                    qListItem_Cache->at(i)->removeChild(qListItem_Cache->at(i)->child(0));
-            }
-        }
-
         while(sqlQuery.next())
         {
             qListItem_DataBase->push_back(new QTreeWidgetItem(item));
             QSqlQuery sqlQuery_(dataBase);
-            if( sqlQuery_.exec(QString("SELECT * FROM \"tree\" WHERE parent_id = %1  AND removed = 0").arg(sqlQuery.value(0).toString()))
+            if( sqlQuery_.exec(QString("SELECT * FROM \"tree\" WHERE parent_id = %1").arg(sqlQuery.value(0).toString()))
                 && sqlQuery_.next())
             {
-                qListItem_DataBase->back()->setText(0, "> " + sqlQuery.value(2).toString());
+                qListItem_DataBase->back()->setText(0, sqlQuery.value(2).toString());
+                qListItem_DataBase->back()->setBackground(0, QBrush(QColor(230, 230, 230)));
             }
             else
             {
                 qListItem_DataBase->back()->setText(0, sqlQuery.value(2).toString());
             }
             qListItem_DataBase->back()->setText(1, sqlQuery.value(0).toString());
-
-            for(int i = 0; i < qListItem_Cache->count(); i++)
-            {
-                if(qListItem_Cache->at(i)->text(1) == item->text(1))
-                {
-                    qListItem_Cache->push_back(new QTreeWidgetItem(qListItem_Cache->at(i)));
-                    qListItem_Cache->back()->setText(0, sqlQuery.value(2).toString());
-                    qListItem_Cache->back()->setText(1, sqlQuery.value(0).toString());
-                }
-            }
+            qListItem_DataBase->back()->setText(2, sqlQuery.value(1).toString());
+            qListItem_DataBase->back()->setText(3, sqlQuery.value(3).toString());
+            if(sqlQuery.value(3).toBool())
+                qListItem_DataBase->back()->setDisabled(true);
         }
-        return true;
     }
-    return false;
+}
+
+void MainWindow::putItem(QList<QTreeWidgetItem *> *listItem, QTreeWidgetItem *item, QTreeWidgetItem *parent)
+{
+    listItem->push_back(new QTreeWidgetItem(parent));
+    listItem->back()->setText(0, item->text(0));
+    listItem->back()->setText(1, item->text(1));
+    listItem->back()->setText(2, item->text(2));
+    listItem->back()->setText(3, item->text(3));
+}
+
+void MainWindow::putItem(QList<QTreeWidgetItem*> *listItem, QTreeWidgetItem *item, QTreeWidget *parent)
+{
+    listItem->push_back(new QTreeWidgetItem(parent));
+    listItem->back()->setText(0, item->text(0));
+    listItem->back()->setText(1, item->text(1));
+    listItem->back()->setText(2, item->text(2));
+    listItem->back()->setText(3, item->text(3));
 }
 
 void MainWindow::onActionOpenTriggered()
@@ -79,7 +77,7 @@ void MainWindow::onActionOpenTriggered()
         onActionResetTriggered();
         dataBase.setDatabaseName(fName);
         dataBase.open();
-        getWhereParentIsNull();
+        loadWhereParentIsNull();
     }
 }
 
@@ -91,11 +89,9 @@ void MainWindow::onActionSaveTriggered()
         sqlQuery.exec(stringListQuery.first());
         stringListQuery.removeFirst();
     }
-    treeWidget_Cache->clear();
     treeWidget_DataBase->clear();
-    qListItem_Cache->clear();
     qListItem_DataBase->clear();
-    getWhereParentIsNull();
+    loadWhereParentIsNull();
 }
 
 void MainWindow::onActionResetTriggered()
@@ -114,13 +110,14 @@ void MainWindow::onActionExitTriggered()
 
 void MainWindow::onDataBaseDoubleClicked(QTreeWidgetItem *item, int column)
 {
-    getChildren(item);
+    loadChildren(item);
 }
 
 void MainWindow::onActionCreateTriggered()
 {
     qListItem_Cache->push_back(new QTreeWidgetItem(treeWidget_Cache->currentItem()));
     qListItem_Cache->back()->setFlags(qListItem_Cache->back()->flags() | Qt::ItemIsEditable);
+    treeWidget_Cache->currentItem()->setExpanded(true);
     treeWidget_Cache->editItem(qListItem_Cache->back());
 }
 
@@ -133,22 +130,68 @@ void MainWindow::onActionEditTriggered()
 void MainWindow::onActionDeleteTriggered()
 {
     stringListQuery.push_back(QString("UPDATE \"tree\" SET removed = 1 WHERE id = %1").arg(treeWidget_Cache->currentItem()->text(1)));
+    treeWidget_Cache->currentItem()->setDisabled(true);
+}
+
+void MainWindow::onActionDownloadTriggered()
+{
+    bool isRoot = true;
+    QList<QTreeWidgetItem*> qListItem_tree;
     QTreeWidgetItem *pp = nullptr;
-    pp = treeWidget_Cache->currentItem()->parent();
-    pp->removeChild(treeWidget_Cache->currentItem());
+    pp = treeWidget_DataBase->currentItem();
+    while(pp && isRoot)
+    {
+        for(int i = 0; i < qListItem_Cache->count() && isRoot; i++)
+        {
+            if(qListItem_Cache->at(i)->text(1) == pp->text(1))
+            {
+                qListItem_tree.push_back(qListItem_Cache->at(i));
+                isRoot = false;
+            }
+        }
+        if(isRoot)
+        {
+            qListItem_tree.push_back(pp);
+            pp = pp->parent();
+        }
+    }
+    for(int i = qListItem_tree.count() - 1; i >= 0; i--)
+    {
+        if(i == qListItem_tree.count() - 1)
+        {
+            if(isRoot)
+            {
+                putItem(qListItem_Cache, qListItem_tree.at(i), treeWidget_Cache);
+                treeWidget_Cache->addTopLevelItem(qListItem_Cache->back());
+            }
+            else
+            {
+                if(qListItem_tree.count() > 1)
+                {
+                    i--;
+                    putItem(qListItem_Cache, qListItem_tree.at(i), qListItem_tree.last());
+                }
+            }
+        }
+        else
+        {
+            putItem(qListItem_Cache, qListItem_tree.at(i), qListItem_Cache->back());
+        }
+    }
 }
 
 void MainWindow::onItemEdit(QTreeWidgetItem *item, int column)
 {
     if( item->flags().testFlag(Qt::ItemIsEditable))
     {
-        if(item->text(1).isEmpty() && !item->text(0).isEmpty())
+        if(item->text(1).isEmpty() && !item->text(0).isEmpty() && item->flags().testFlag(Qt::ItemIsEnabled))
         {
             stringListQuery.push_back(QString("INSERT INTO \"tree\" (parent_id, data) VALUES (%1, '%2')").arg(item->parent()->text(1), item->text(0)));
         }
         else
         {
-            stringListQuery.push_back(QString("UPDATE \"tree\" SET data = '%1' WHERE id = %2").arg(item->text(0), item->text(1)));
+            if(!item->text(0).isEmpty())
+                stringListQuery.push_back(QString("UPDATE \"tree\" SET data = '%1' WHERE id = %2").arg(item->text(0), item->text(1)));
         }
     }
 }
@@ -170,6 +213,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     qListItem_DataBase = new QList<QTreeWidgetItem*>;
     treeWidget_DataBase = new QTreeWidget(centralwidget);
+    treeWidget_DataBase->setContextMenuPolicy(Qt::ActionsContextMenu);
     treeWidget_DataBase->headerItem()->setText(0, QString("DataBase"));
 
     gridLayout->addWidget(treeWidget_Cache, 0, 0, 1, 1);
@@ -179,16 +223,21 @@ MainWindow::MainWindow(QWidget *parent)
     this->setMenuBar(menubar);
     menuFile = new QMenu(menubar);
     contextMenu_Cache = new QMenu(treeWidget_Cache);
+    contextMenu_DataBase = new QMenu(treeWidget_DataBase);
     actionOpen = new QAction(this);
     actionSave = new QAction(this);
     actionReset = new QAction(this);
     actionExit = new QAction(this);
+    saveAction_Cache = new QAction("save", contextMenu_Cache);
     createAction_Cache = new QAction("create", contextMenu_Cache);
     editAction_Cache = new QAction("edit", contextMenu_Cache);
     deleteAction_Cache = new QAction("delete", contextMenu_Cache);
+    downloadAction_DataBase = new QAction("download", contextMenu_DataBase);
+    treeWidget_Cache->addAction(saveAction_Cache);
     treeWidget_Cache->addAction(createAction_Cache);
     treeWidget_Cache->addAction(editAction_Cache);
     treeWidget_Cache->addAction(deleteAction_Cache);
+    treeWidget_DataBase->addAction(downloadAction_DataBase);
     menubar->addAction(menuFile->menuAction());
     menuFile->addAction(actionOpen);
     menuFile->addAction(actionSave);
@@ -205,9 +254,11 @@ MainWindow::MainWindow(QWidget *parent)
     connect(actionReset, SIGNAL(triggered(bool)), this, SLOT(onActionResetTriggered()));
     connect(actionExit, SIGNAL(triggered(bool)), this, SLOT(onActionExitTriggered()));
     connect(treeWidget_DataBase, SIGNAL(itemDoubleClicked(QTreeWidgetItem*,int)), this, SLOT(onDataBaseDoubleClicked(QTreeWidgetItem*,int)));
+    connect(saveAction_Cache, SIGNAL(triggered(bool)), this, SLOT(onActionSaveTriggered()));
     connect(createAction_Cache, SIGNAL(triggered(bool)), this, SLOT(onActionCreateTriggered()));
     connect(editAction_Cache, SIGNAL(triggered(bool)), this, SLOT(onActionEditTriggered()));
     connect(deleteAction_Cache, SIGNAL(triggered(bool)), this, SLOT(onActionDeleteTriggered()));
+    connect(downloadAction_DataBase, SIGNAL(triggered(bool)), this, SLOT(onActionDownloadTriggered()));
     connect(treeWidget_Cache, SIGNAL(itemChanged(QTreeWidgetItem*,int)), this, SLOT(onItemEdit(QTreeWidgetItem*,int)));
 }
 

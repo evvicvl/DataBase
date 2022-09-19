@@ -33,16 +33,21 @@ class MainWindow : public QMainWindow
     QMenuBar *menubar;
     QMenu *menuFile;
     QMenu* contextMenu_Cache;
+    QMenu* contextMenu_DataBase;
     QAction *actionOpen;
     QAction *actionSave;
     QAction *actionReset;
     QAction *actionExit;
+    QAction *saveAction_Cache;
     QAction *createAction_Cache;
     QAction *editAction_Cache;
     QAction *deleteAction_Cache;
+    QAction *downloadAction_DataBase;
 
-bool getWhereParentIsNull();
-bool getChildren(QTreeWidgetItem* item);
+void loadWhereParentIsNull();
+void loadChildren(QTreeWidgetItem* item);
+void putItem(QList<QTreeWidgetItem*> *listItem, QTreeWidgetItem* item, QTreeWidgetItem *parent);
+void putItem(QList<QTreeWidgetItem *> *listItem, QTreeWidgetItem* item, QTreeWidget *parent);
 
 public slots:
     void onActionOpenTriggered();
@@ -53,6 +58,7 @@ public slots:
     void onActionCreateTriggered();
     void onActionEditTriggered();
     void onActionDeleteTriggered();
+    void onActionDownloadTriggered();
     void onItemEdit(QTreeWidgetItem* item,int column);
 
 public:
