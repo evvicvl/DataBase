@@ -1,198 +1,134 @@
 #include "mainwindow.h"
 
-void MainWindow::loadWhereParentIsNull()
+QStandardItem *MainWindow::insertItem(QStandardItem *parentItem, QList<QVariant> data)
 {
-    QSqlQuery sqlQuery(dataBase);
-    stringQuery = "SELECT * FROM \"tree\" WHERE parent_id IS NULL";
-    if(sqlQuery.exec(stringQuery))
-    {
-        if(sqlQuery.next())
-        {
-            qListItem_DataBase->push_back(new QTreeWidgetItem(treeWidget_DataBase));
-            qListItem_DataBase->back()->setText(0, sqlQuery.value(2).toString());
-            qListItem_DataBase->back()->setText(1, sqlQuery.value(0).toString());
-            qListItem_DataBase->back()->setText(2, sqlQuery.value(1).toString());
-            qListItem_DataBase->back()->setText(3, sqlQuery.value(3).toString());
-            qListItem_DataBase->back()->setBackground(0, QBrush(QColor(230, 230, 230)));
-            treeWidget_DataBase->addTopLevelItem(qListItem_DataBase->back());
-        }
-    }
+    QStandardItem *item = new QStandardItem(data.at(2).toString());
+    item->setData(data.at(0), Qt::UserRole);
+    item->setData(data.at(1), Qt::UserRole + 1);
+    item->setData(data.at(2), Qt::UserRole + 2);
+    parentItem->appendRow(item);
+    return item;
 }
 
-void MainWindow::loadChildren(QTreeWidgetItem* item)
+QStandardItem *MainWindow::insertItem(QStandardItem *parentItem, QStandardItem *item)
 {
-    QSqlQuery sqlQuery(dataBase);
-    stringQuery = QString("SELECT * FROM \"tree\" WHERE parent_id = %1").arg(item->text(1));
-    if(sqlQuery.exec(stringQuery))
-    {
-        while(item->childCount() > 0)
-            item->removeChild(item->child(0));
-
-        while(sqlQuery.next())
-        {
-            qListItem_DataBase->push_back(new QTreeWidgetItem(item));
-            QSqlQuery sqlQuery_(dataBase);
-            if( sqlQuery_.exec(QString("SELECT * FROM \"tree\" WHERE parent_id = %1").arg(sqlQuery.value(0).toString()))
-                && sqlQuery_.next())
-            {
-                qListItem_DataBase->back()->setText(0, sqlQuery.value(2).toString());
-                qListItem_DataBase->back()->setBackground(0, QBrush(QColor(230, 230, 230)));
-            }
-            else
-            {
-                qListItem_DataBase->back()->setText(0, sqlQuery.value(2).toString());
-            }
-            qListItem_DataBase->back()->setText(1, sqlQuery.value(0).toString());
-            qListItem_DataBase->back()->setText(2, sqlQuery.value(1).toString());
-            qListItem_DataBase->back()->setText(3, sqlQuery.value(3).toString());
-            if(sqlQuery.value(3).toBool())
-                qListItem_DataBase->back()->setDisabled(true);
-        }
-    }
+    QStandardItem *item_ = item->clone();
+    item_->setEditable(true);
+    parentItem->appendRow(item_);
+    return item_;
 }
 
-void MainWindow::putItem(QList<QTreeWidgetItem *> *listItem, QTreeWidgetItem *item, QTreeWidgetItem *parent)
+void MainWindow::loadFromDB()
 {
-    listItem->push_back(new QTreeWidgetItem(parent));
-    listItem->back()->setText(0, item->text(0));
-    listItem->back()->setText(1, item->text(1));
-    listItem->back()->setText(2, item->text(2));
-    listItem->back()->setText(3, item->text(3));
-}
-
-void MainWindow::putItem(QList<QTreeWidgetItem*> *listItem, QTreeWidgetItem *item, QTreeWidget *parent)
-{
-    listItem->push_back(new QTreeWidgetItem(parent));
-    listItem->back()->setText(0, item->text(0));
-    listItem->back()->setText(1, item->text(1));
-    listItem->back()->setText(2, item->text(2));
-    listItem->back()->setText(3, item->text(3));
-}
-
-void MainWindow::onActionOpenTriggered()
-{
-    QString fName = QFileDialog::getOpenFileName();
-    if(!fName.isEmpty())
-    {
-        onActionResetTriggered();
-        dataBase.setDatabaseName(fName);
-        dataBase.open();
-        loadWhereParentIsNull();
-    }
-}
-
-void MainWindow::onActionSaveTriggered()
-{
-    QSqlQuery sqlQuery(dataBase);
-    while(stringListQuery.count() > 0)
-    {
-        sqlQuery.exec(stringListQuery.first());
-        stringListQuery.removeFirst();
-    }
-    treeWidget_DataBase->clear();
-    qListItem_DataBase->clear();
-    loadWhereParentIsNull();
-}
-
-void MainWindow::onActionResetTriggered()
-{
-    treeWidget_Cache->clear();
-    treeWidget_DataBase->clear();
-    qListItem_Cache->clear();
-    qListItem_DataBase->clear();
-    stringListQuery.clear();
-}
-
-void MainWindow::onActionExitTriggered()
-{
-    this->close();
-}
-
-void MainWindow::onDataBaseDoubleClicked(QTreeWidgetItem *item, int column)
-{
-    loadChildren(item);
-}
-
-void MainWindow::onActionCreateTriggered()
-{
-    qListItem_Cache->push_back(new QTreeWidgetItem(treeWidget_Cache->currentItem()));
-    qListItem_Cache->back()->setFlags(qListItem_Cache->back()->flags() | Qt::ItemIsEditable);
-    treeWidget_Cache->currentItem()->setExpanded(true);
-    treeWidget_Cache->editItem(qListItem_Cache->back());
-}
-
-void MainWindow::onActionEditTriggered()
-{
-    treeWidget_Cache->currentItem()->setFlags(treeWidget_Cache->currentItem()->flags() | Qt::ItemIsEditable);
-    treeWidget_Cache->editItem(treeWidget_Cache->currentItem(), 0);
-}
-
-void MainWindow::onActionDeleteTriggered()
-{
-    stringListQuery.push_back(QString("UPDATE \"tree\" SET removed = 1 WHERE id = %1").arg(treeWidget_Cache->currentItem()->text(1)));
-    treeWidget_Cache->currentItem()->setDisabled(true);
+    maxId = 0;
+    while(rootItem_Cache->rowCount() > 0)
+        rootItem_Cache->removeRow(0);
+    while(rootItem_DataBase->rowCount() > 0)
+        rootItem_DataBase->removeRow(0);
+    readChildrensFromDB(rootItem_DataBase, 0);
 }
 
 void MainWindow::onActionDownloadTriggered()
 {
-    bool isRoot = true;
-    QList<QTreeWidgetItem*> qListItem_tree;
-    QTreeWidgetItem *pp = nullptr;
-    pp = treeWidget_DataBase->currentItem();
-    while(pp && isRoot)
+    QStandardItem *itemCache = rootItem_Cache;
+    QStandardItem *itemDataBase = model_DataBase->itemFromIndex(treeView_DataBase->currentIndex());
+    if(itemDataBase)
     {
-        for(int i = 0; i < qListItem_Cache->count() && isRoot; i++)
+        QModelIndexList matchesParent = treeView_Cache->model()->match(model_Cache->index(0, 0), Qt::UserRole, itemDataBase->data(Qt::UserRole + 1), 1, Qt::MatchExactly | Qt::MatchWrap | Qt::MatchRecursive);
+        if(matchesParent.count() > 0)
         {
-            if(qListItem_Cache->at(i)->text(1) == pp->text(1))
-            {
-                qListItem_tree.push_back(qListItem_Cache->at(i));
-                isRoot = false;
-            }
+            itemCache = model_Cache->itemFromIndex(matchesParent.at(0));
         }
-        if(isRoot)
+        itemCache = insertItem(itemCache, itemDataBase);
+
+        QModelIndexList matchesChildrens = treeView_Cache->model()->match(model_Cache->index(0, 0), Qt::UserRole + 1, itemDataBase->data(Qt::UserRole), -1, Qt::MatchExactly | Qt::MatchWrap | Qt::MatchRecursive);
+        for(int i = 0; i < matchesChildrens.count(); i++)
         {
-            qListItem_tree.push_back(pp);
-            pp = pp->parent();
-        }
-    }
-    for(int i = qListItem_tree.count() - 1; i >= 0; i--)
-    {
-        if(i == qListItem_tree.count() - 1)
-        {
-            if(isRoot)
-            {
-                putItem(qListItem_Cache, qListItem_tree.at(i), treeWidget_Cache);
-                treeWidget_Cache->addTopLevelItem(qListItem_Cache->back());
-            }
-            else
-            {
-                if(qListItem_tree.count() > 1)
-                {
-                    i--;
-                    putItem(qListItem_Cache, qListItem_tree.at(i), qListItem_tree.last());
-                }
-            }
-        }
-        else
-        {
-            putItem(qListItem_Cache, qListItem_tree.at(i), qListItem_Cache->back());
+            QList<QStandardItem*> items = model_Cache->takeRow(matchesChildrens.at(i).row());
+            itemCache->appendRows(items);
         }
     }
 }
 
-void MainWindow::onItemEdit(QTreeWidgetItem *item, int column)
+void MainWindow::onActionCreateTriggered()
 {
-    if( item->flags().testFlag(Qt::ItemIsEditable))
+    QStandardItem *parentItemCache = model_Cache->itemFromIndex(treeView_Cache->currentIndex());
+    QStandardItem *newItemCache = new QStandardItem("new item");
+    if(!parentItemCache)
+        parentItemCache = rootItem_Cache;
+    newItemCache->setData(++maxId, Qt::UserRole);
+    newItemCache->setData(parentItemCache->data(Qt::UserRole), Qt::UserRole + 1);
+    newItemCache->setData(newItemCache->text(), Qt::UserRole + 2);
+    parentItemCache->appendRow(newItemCache);
+    treeView_Cache->setCurrentIndex(newItemCache->index());
+    treeView_Cache->edit(newItemCache->index());
+    QStandardItem *newItemDataBase = newItemCache->clone();
+    QModelIndexList matchesDataBase = treeView_DataBase->model()->match(model_DataBase->index(0, 0), Qt::UserRole, parentItemCache->data(Qt::UserRole), 1, Qt::MatchExactly | Qt::MatchWrap | Qt::MatchRecursive);
+    if(matchesDataBase.count() > 0)
+        model_DataBase->itemFromIndex(matchesDataBase.at(0))->appendRow(newItemDataBase);
+    else
+        rootItem_DataBase->appendRow(newItemDataBase);
+}
+
+void MainWindow::onActionEditTriggered()
+{
+    QStandardItem *itemCache = model_Cache->itemFromIndex(treeView_Cache->currentIndex());
+    if(itemCache)
+        treeView_Cache->edit(itemCache->index());
+}
+
+void MainWindow::onActionDeleteTriggered()
+{
+    QStandardItem *itemCache = model_Cache->itemFromIndex(treeView_Cache->currentIndex());
+    if(itemCache)
     {
-        if(item->text(1).isEmpty() && !item->text(0).isEmpty() && item->flags().testFlag(Qt::ItemIsEnabled))
+        deleteItem(itemCache);
+        QModelIndexList matchesDataBase = treeView_DataBase->model()->match(model_DataBase->index(0, 0), Qt::UserRole, itemCache->data(Qt::UserRole), 1, Qt::MatchExactly | Qt::MatchWrap | Qt::MatchRecursive);
+        if(matchesDataBase.count() > 0)
         {
-            stringListQuery.push_back(QString("INSERT INTO \"tree\" (parent_id, data) VALUES (%1, '%2')").arg(item->parent()->text(1), item->text(0)));
+            deleteItem(model_DataBase->itemFromIndex(matchesDataBase.at(0)));
         }
-        else
+        treeView_Cache->setCurrentIndex(QModelIndex());
+        treeView_DataBase->setCurrentIndex(QModelIndex());
+    }
+}
+
+void MainWindow::onItemChanged(QStandardItem *item)
+{
+    if(item->isEnabled())
+    {
+        QModelIndexList matchesDataBase = treeView_DataBase->model()->match(model_DataBase->index(0, 0), Qt::UserRole, item->data(Qt::UserRole), 1, Qt::MatchExactly | Qt::MatchWrap | Qt::MatchRecursive);
+        if(matchesDataBase.count() > 0)
         {
-            if(!item->text(0).isEmpty())
-                stringListQuery.push_back(QString("UPDATE \"tree\" SET data = '%1' WHERE id = %2").arg(item->text(0), item->text(1)));
+            model_DataBase->itemFromIndex(matchesDataBase.at(0))->setText(item->text());
         }
+    }
+}
+
+void MainWindow::readChildrensFromDB(QStandardItem *parent, int id)
+{
+    QSqlQuery sqlQuery(dataBase);
+    if(sqlQuery.exec(QString("SELECT * FROM \"tree\" WHERE parent_id = %1").arg(id)))
+    {
+        while(sqlQuery.next())
+        {
+            QStandardItem *item = insertItem(parent, QList({QVariant(sqlQuery.value(0)),
+                                                            QVariant(sqlQuery.value(1)),
+                                                            QVariant(sqlQuery.value(2))}));
+            item->setEditable(false);
+            if(item->data(Qt::UserRole).toInt() > maxId)
+                maxId = item->data(Qt::UserRole).toInt();
+            readChildrensFromDB(item, sqlQuery.value(0).toInt());
+        }
+    }
+}
+
+void MainWindow::deleteItem(QStandardItem *item)
+{
+    item->setEnabled(false);
+    for(int i = 0; i < item->rowCount(); i++)
+    {
+        deleteItem(item->child(i));
     }
 }
 
@@ -200,66 +136,74 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     resize(800, 600);
-    dataBase = QSqlDatabase::addDatabase("QSQLITE");
 
-    centralwidget = new QWidget(this);
-    setCentralWidget(centralwidget);
+    QString dataBaseName = "Tree.sql";
+    dataBase = QSqlDatabase::addDatabase("QSQLITE");
+    if(QFile::exists(QDir::currentPath() + "/" + dataBaseName))
+    {
+        dataBase.setDatabaseName(QDir::currentPath() + "/" + dataBaseName);
+        dataBase.open();
+    }
+    else
+    {
+        QMessageBox::warning(this, "Внимание", "Пожалуйста, положите файл " + dataBaseName + " рядом с исполняемым\n"
+                                               "и перезапустите программу");
+    }
+
+    centralwidget = new QWidget();
+    this->setCentralWidget(centralwidget);
     gridLayout = new QGridLayout(centralwidget);
 
-    qListItem_Cache = new QList<QTreeWidgetItem*>;
-    treeWidget_Cache = new QTreeWidget(centralwidget);
-    treeWidget_Cache->setContextMenuPolicy(Qt::ActionsContextMenu);
-    treeWidget_Cache->headerItem()->setText(0, QString("Cache"));
+    treeView_Cache = new QTreeView(centralwidget);
+    treeView_Cache->setContextMenuPolicy(Qt::ActionsContextMenu);
+    gridLayout->addWidget(treeView_Cache, 0, 0, 1, 1);
 
-    qListItem_DataBase = new QList<QTreeWidgetItem*>;
-    treeWidget_DataBase = new QTreeWidget(centralwidget);
-    treeWidget_DataBase->setContextMenuPolicy(Qt::ActionsContextMenu);
-    treeWidget_DataBase->headerItem()->setText(0, QString("DataBase"));
+    treeView_DataBase = new QTreeView(centralwidget);
+    treeView_DataBase->setContextMenuPolicy(Qt::ActionsContextMenu);
+    gridLayout->addWidget(treeView_DataBase, 0, 1, 1, 1);
 
-    gridLayout->addWidget(treeWidget_Cache, 0, 0, 1, 1);
-    gridLayout->addWidget(treeWidget_DataBase, 0, 1, 1, 1);
+    model_Cache = new QStandardItemModel(treeView_Cache);
+    model_Cache->setHorizontalHeaderLabels(QStringList("Cache"));
+    treeView_Cache->setModel(model_Cache);
+    rootItem_Cache = model_Cache->invisibleRootItem();
+
+    model_DataBase = new QStandardItemModel(treeView_DataBase->cornerWidget());
+    model_DataBase->setHorizontalHeaderLabels(QStringList("DataBase"));
+    treeView_DataBase->setModel(model_DataBase);
+    rootItem_DataBase = model_DataBase->invisibleRootItem();
 
     menubar = new QMenuBar(this);
     this->setMenuBar(menubar);
     menuFile = new QMenu(menubar);
-    contextMenu_Cache = new QMenu(treeWidget_Cache);
-    contextMenu_DataBase = new QMenu(treeWidget_DataBase);
-    actionOpen = new QAction(this);
-    actionSave = new QAction(this);
     actionReset = new QAction(this);
     actionExit = new QAction(this);
-    saveAction_Cache = new QAction("save", contextMenu_Cache);
-    createAction_Cache = new QAction("create", contextMenu_Cache);
-    editAction_Cache = new QAction("edit", contextMenu_Cache);
-    deleteAction_Cache = new QAction("delete", contextMenu_Cache);
-    downloadAction_DataBase = new QAction("download", contextMenu_DataBase);
-    treeWidget_Cache->addAction(saveAction_Cache);
-    treeWidget_Cache->addAction(createAction_Cache);
-    treeWidget_Cache->addAction(editAction_Cache);
-    treeWidget_Cache->addAction(deleteAction_Cache);
-    treeWidget_DataBase->addAction(downloadAction_DataBase);
     menubar->addAction(menuFile->menuAction());
-    menuFile->addAction(actionOpen);
-    menuFile->addAction(actionSave);
     menuFile->addAction(actionReset);
     menuFile->addAction(actionExit);
-    actionOpen->setText(QCoreApplication::translate("MainWindow", "Open", nullptr));
-    actionSave->setText(QCoreApplication::translate("MainWindow", "Save", nullptr));
-    actionExit->setText(QCoreApplication::translate("MainWindow", "Exit", nullptr));
     actionReset->setText(QCoreApplication::translate("MainWindow", "Reset", nullptr));
+    actionExit->setText(QCoreApplication::translate("MainWindow", "Exit", nullptr));
     menuFile->setTitle(QCoreApplication::translate("MainWindow", "File", nullptr));
 
-    connect(actionOpen, SIGNAL(triggered(bool)), this, SLOT(onActionOpenTriggered()));
-    connect(actionSave, SIGNAL(triggered(bool)), this, SLOT(onActionSaveTriggered()));
-    connect(actionReset, SIGNAL(triggered(bool)), this, SLOT(onActionResetTriggered()));
-    connect(actionExit, SIGNAL(triggered(bool)), this, SLOT(onActionExitTriggered()));
-    connect(treeWidget_DataBase, SIGNAL(itemDoubleClicked(QTreeWidgetItem*,int)), this, SLOT(onDataBaseDoubleClicked(QTreeWidgetItem*,int)));
-    connect(saveAction_Cache, SIGNAL(triggered(bool)), this, SLOT(onActionSaveTriggered()));
-    connect(createAction_Cache, SIGNAL(triggered(bool)), this, SLOT(onActionCreateTriggered()));
-    connect(editAction_Cache, SIGNAL(triggered(bool)), this, SLOT(onActionEditTriggered()));
-    connect(deleteAction_Cache, SIGNAL(triggered(bool)), this, SLOT(onActionDeleteTriggered()));
-    connect(downloadAction_DataBase, SIGNAL(triggered(bool)), this, SLOT(onActionDownloadTriggered()));
-    connect(treeWidget_Cache, SIGNAL(itemChanged(QTreeWidgetItem*,int)), this, SLOT(onItemEdit(QTreeWidgetItem*,int)));
+    contextMenu_Cache = new QMenu(treeView_Cache);
+    actionCreate_Cache = new QAction("create", contextMenu_Cache);
+    actionEdit_Cache = new QAction("edit", contextMenu_Cache);
+    actionDelete_Cache = new QAction("delete", contextMenu_Cache);
+    treeView_Cache->addAction(actionCreate_Cache);
+    treeView_Cache->addAction(actionEdit_Cache);
+    treeView_Cache->addAction(actionDelete_Cache);
+    contextMenu_DataBase = new QMenu(treeView_DataBase);
+    actionDownload_DataBase = new QAction("download", contextMenu_DataBase);
+    treeView_DataBase->addAction(actionDownload_DataBase);
+
+    connect(actionReset, &QAction::triggered, this, &MainWindow::loadFromDB);
+    connect(actionExit, &QAction::triggered, this, &QCoreApplication::quit);
+    connect(actionDownload_DataBase, &QAction::triggered, this, &MainWindow::onActionDownloadTriggered);
+    connect(actionCreate_Cache, &QAction::triggered, this, &MainWindow::onActionCreateTriggered);
+    connect(actionEdit_Cache, &QAction::triggered, this, &MainWindow::onActionEditTriggered);
+    connect(actionDelete_Cache, &QAction::triggered, this, &MainWindow::onActionDeleteTriggered);
+    connect(model_Cache, SIGNAL(itemChanged(QStandardItem*)), this, SLOT(onItemChanged(QStandardItem*)));
+
+    loadFromDB();
 }
 
 MainWindow::~MainWindow()

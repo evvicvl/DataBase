@@ -1,65 +1,68 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <QCoreApplication>
-#include <QStandardItemModel>
 #include <QAbstractItemModel>
-#include <QMainWindow>
+#include <QStandardItemModel>
+#include <QCoreApplication>
+#include <QStandardItem>
 #include <QGridLayout>
-#include <QFileDialog>
+#include <QMainWindow>
+#include <QMessageBox>
 #include <QTreeView>
-#include <QTreeWidget>
 #include <QMenuBar>
 #include <QAction>
-#include <QDialog>
-#include <QStringList>
+#include <QWidget>
 #include <QMenu>
 #include <QtSql>
+#include <QFile>
+#include <QDir>
+
+#include <QDebug>
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
+    int maxId;
+
     QSqlDatabase dataBase;
-    QString stringQuery;
-    QStringList stringListQuery;
 
     QWidget *centralwidget;
     QGridLayout *gridLayout;
-    QList<QTreeWidgetItem*> *qListItem_Cache;
-    QTreeWidget *treeWidget_Cache;
-    QList<QTreeWidgetItem*> *qListItem_DataBase;
-    QTreeWidget *treeWidget_DataBase;
+
+    QTreeView *treeView_Cache;
+    QStandardItem *rootItem_Cache;
+    QStandardItemModel *model_Cache;
+
+    QTreeView *treeView_DataBase;
+    QStandardItem *rootItem_DataBase;
+    QStandardItemModel *model_DataBase;
+
     QMenuBar *menubar;
     QMenu *menuFile;
-    QMenu* contextMenu_Cache;
-    QMenu* contextMenu_DataBase;
-    QAction *actionOpen;
-    QAction *actionSave;
     QAction *actionReset;
     QAction *actionExit;
-    QAction *saveAction_Cache;
-    QAction *createAction_Cache;
-    QAction *editAction_Cache;
-    QAction *deleteAction_Cache;
-    QAction *downloadAction_DataBase;
 
-void loadWhereParentIsNull();
-void loadChildren(QTreeWidgetItem* item);
-void putItem(QList<QTreeWidgetItem*> *listItem, QTreeWidgetItem* item, QTreeWidgetItem *parent);
-void putItem(QList<QTreeWidgetItem *> *listItem, QTreeWidgetItem* item, QTreeWidget *parent);
+    QMenu* contextMenu_Cache;
+    QMenu* contextMenu_DataBase;
+    QAction *actionCreate_Cache;
+    QAction *actionEdit_Cache;
+    QAction *actionDelete_Cache;
+    QAction *actionDownload_DataBase;
+
+    void insertChild(QAbstractItemModel *model, const QModelIndex index, QStringList data);
+    QStandardItem* insertItem(QStandardItem *parentItem, QList<QVariant> data);
+    QStandardItem* insertItem(QStandardItem *parentItem, QStandardItem *item);
+    void readChildrensFromDB(QStandardItem *parent, int id);
+    void deleteItem(QStandardItem *item);
 
 public slots:
-    void onActionOpenTriggered();
-    void onActionSaveTriggered();
-    void onActionResetTriggered();
-    void onActionExitTriggered();
-    void onDataBaseDoubleClicked(QTreeWidgetItem* item, int column);
+    void loadFromDB();
+    void onActionDownloadTriggered();
     void onActionCreateTriggered();
     void onActionEditTriggered();
     void onActionDeleteTriggered();
-    void onActionDownloadTriggered();
-    void onItemEdit(QTreeWidgetItem* item,int column);
+    void onItemChanged(QStandardItem *item);
 
 public:
     MainWindow(QWidget *parent = nullptr);
